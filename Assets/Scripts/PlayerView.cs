@@ -22,6 +22,12 @@ public class PlayerView : NetworkBehaviour
         OnNicknameChanged(default, _playerNetwork.Nickname.Value);
         OnHpChanged(0, _playerNetwork.HP.Value);
         OnAmmoChanged(0, _playerNetwork.Ammo.Value);
+
+        OnRespawnTimerChanged(0, _playerNetwork.RespawnTimer.Value);
+
+        if (!IsOwner)
+            _ammoText.gameObject.SetActive(false);
+
     }
 
     public override void OnNetworkDespawn()

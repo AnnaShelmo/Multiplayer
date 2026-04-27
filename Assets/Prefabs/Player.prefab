@@ -351,6 +351,10 @@ MonoBehaviour:
   _model: {fileID: 5328679236927305687}
   _respawnDelay: 7
   _maxAmmo: 20
+  _spawnPoints:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
 --- !u!114 &5417260901845386294
 MonoBehaviour:
   m_ObjectHideFlags: 0

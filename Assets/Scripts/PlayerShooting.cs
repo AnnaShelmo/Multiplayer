@@ -33,8 +33,8 @@ public class PlayerShooting : NetworkBehaviour
         if (Time.time < _lastShotTime + _cooldown) return;
 
         _lastShotTime = Time.time;
-
         _playerNetwork.Ammo.Value--;
+
 
         var go = Instantiate(_projectilePrefab,
                              pos + dir * 1.2f,
@@ -43,4 +43,5 @@ public class PlayerShooting : NetworkBehaviour
         go.GetComponent<NetworkObject>()
           .SpawnWithOwnership(rpc.Receive.SenderClientId);
     }
+
 }

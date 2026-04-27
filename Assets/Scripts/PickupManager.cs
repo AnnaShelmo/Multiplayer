@@ -8,19 +8,16 @@ public class PickupManager : MonoBehaviour
     [SerializeField] private Transform[] _spawnPoints;
     [SerializeField] private float _respawnDelay = 3f;
 
-    private bool _spawned = false;
 
-    private void Update()
+    private void Start()
     {
-        if (_spawned) return;
+        NetworkManager.Singleton.OnServerStarted += SpawnAll;
+    }
 
-        if (NetworkManager.Singleton != null &&
-            NetworkManager.Singleton.IsServer)
-        {
-            Debug.Log("SERVER DETECTED → spawning pickups");
-            SpawnAll();
-            _spawned = true;
-        }
+    private void OnDestroy()
+    {
+        if (NetworkManager.Singleton != null)
+            NetworkManager.Singleton.OnServerStarted -= SpawnAll;
     }
 
     private void SpawnAll()

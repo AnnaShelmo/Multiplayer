@@ -20,38 +20,35 @@ public class PlayerNetwork : NetworkBehaviour
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server);
 
-    // 🔥 ПАТРОНЫ
+    // ПАТРОНЫ
     public NetworkVariable<int> Ammo = new(
         10,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server);
 
-    // 🔥 ТАЙМЕР РЕСПАВНА
+    // ТАЙМЕР РЕСПАВНА
     public NetworkVariable<int> RespawnTimer = new(
         0,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server);
 
-    private Transform[] _spawnPoints;
 
     [SerializeField] private GameObject _model;
     [SerializeField] private float _respawnDelay = 7f;
     [SerializeField] private int _maxAmmo = 20;
+    [SerializeField] private Transform[] _spawnPoints;
 
     public override void OnNetworkSpawn()
     {
+        _spawnPoints = SpawnPointsHolder.Instance.Points;
+
         if (IsOwner)
             SubmitNicknameServerRpc(ConnectionUI.PlayerNickname);
 
         HP.OnValueChanged += OnHpChanged;
         IsAlive.OnValueChanged += OnIsAliveChanged;
-
-        _spawnPoints = GameObject.Find("SpawnPoints")
-                                 .GetComponentsInChildren<Transform>();
-
-        if (IsServer)
-            Ammo.Value = _maxAmmo;
     }
+
 
     public override void OnNetworkDespawn()
     {
@@ -93,10 +90,15 @@ public class PlayerNetwork : NetworkBehaviour
 
         RespawnTimer.Value = 0;
 
-        if (_spawnPoints.Length > 1)
+        if (_spawnPoints.Length > 0)
         {
-            int idx = Random.Range(1, _spawnPoints.Length);
+            int idx = Random.Range(0, _spawnPoints.Length);
+            var cc = GetComponent<CharacterController>();
+            cc.enabled = false;
+
             transform.position = _spawnPoints[idx].position;
+
+            cc.enabled = true;
         }
 
         HP.Value = 100;
