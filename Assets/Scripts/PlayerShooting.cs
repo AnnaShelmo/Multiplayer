@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+﻿using FishNet.Object;
 using UnityEngine;
 
 public class PlayerShooting : NetworkBehaviour
@@ -10,14 +10,14 @@ public class PlayerShooting : NetworkBehaviour
     private float _lastShotTime;
     private PlayerNetwork _playerNetwork;
 
-    public override void OnNetworkSpawn()
+    public override void OnStartNetwork()
     {
         _playerNetwork = GetComponent<PlayerNetwork>();
     }
 
     private void Update()
     {
-        if (!IsOwner) return;
+        if (!base.IsOwner) return;
         if (!_playerNetwork.IsAlive.Value) return;
 
         if (Input.GetKeyDown(KeyCode.Space))
@@ -25,8 +25,7 @@ public class PlayerShooting : NetworkBehaviour
     }
 
     [ServerRpc]
-    private void ShootServerRpc(Vector3 pos, Vector3 dir,
-                                ServerRpcParams rpc = default)
+    private void ShootServerRpc(Vector3 pos, Vector3 dir)
     {
         if (!_playerNetwork.IsAlive.Value) return;
         if (_playerNetwork.Ammo.Value <= 0) return;
@@ -35,13 +34,7 @@ public class PlayerShooting : NetworkBehaviour
         _lastShotTime = Time.time;
         _playerNetwork.Ammo.Value--;
 
-
-        var go = Instantiate(_projectilePrefab,
-                             pos + dir * 1.2f,
-                             Quaternion.LookRotation(dir));
-
-        go.GetComponent<NetworkObject>()
-          .SpawnWithOwnership(rpc.Receive.SenderClientId);
+        var go = Instantiate(_projectilePrefab, pos + dir * 1.2f, Quaternion.LookRotation(dir));
+        base.Spawn(go, Owner);
     }
-
 }

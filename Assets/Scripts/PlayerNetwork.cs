@@ -1,74 +1,58 @@
-﻿using Unity.Collections;
-using Unity.Netcode;
+﻿using FishNet.Object;
+using FishNet.Object.Synchronizing;
 using UnityEngine;
 using System.Collections;
 
 public class PlayerNetwork : NetworkBehaviour
 {
-    public NetworkVariable<FixedString32Bytes> Nickname = new(
-        default,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server);
-
-    public NetworkVariable<int> HP = new(
-        100,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server);
-
-    public NetworkVariable<bool> IsAlive = new(
-        true,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server);
-
-    // ПАТРОНЫ
-    public NetworkVariable<int> Ammo = new(
-        10,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server);
-
-    // ТАЙМЕР РЕСПАВНА
-    public NetworkVariable<int> RespawnTimer = new(
-        0,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server);
-
+    public readonly SyncVar<string> Nickname = new("Player");
+    public readonly SyncVar<int> HP = new(100);
+    public readonly SyncVar<bool> IsAlive = new(true);
+    public readonly SyncVar<int> Ammo = new(20);
+    public readonly SyncVar<int> RespawnTimer = new(0);
 
     [SerializeField] private GameObject _model;
     [SerializeField] private float _respawnDelay = 7f;
     [SerializeField] private int _maxAmmo = 20;
-    [SerializeField] private Transform[] _spawnPoints;
 
-    public override void OnNetworkSpawn()
+    private Transform[] _spawnPoints;
+
+    public override void OnStartNetwork()
     {
-        _spawnPoints = SpawnPointsHolder.Instance.Points;
+        if (SpawnPointsHolder.Instance != null)
+            _spawnPoints = SpawnPointsHolder.Instance.Points;
 
-        if (IsOwner)
+        HP.OnChange += OnHpChanged;
+        IsAlive.OnChange += OnIsAliveChanged;
+    }
+
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+
+        if (base.IsOwner)
+        {
             SubmitNicknameServerRpc(ConnectionUI.PlayerNickname);
-
-        HP.OnValueChanged += OnHpChanged;
-        IsAlive.OnValueChanged += OnIsAliveChanged;
+        }
     }
 
-
-    public override void OnNetworkDespawn()
+    public override void OnStopNetwork()
     {
-        HP.OnValueChanged -= OnHpChanged;
-        IsAlive.OnValueChanged -= OnIsAliveChanged;
+        HP.OnChange -= OnHpChanged;
+        IsAlive.OnChange -= OnIsAliveChanged;
     }
 
-    [ServerRpc(InvokePermission = RpcInvokePermission.Everyone)]
+    [ServerRpc]
     private void SubmitNicknameServerRpc(string nickname)
     {
-        string safeValue = string.IsNullOrWhiteSpace(nickname)
-            ? $"Player_{OwnerClientId}"
+        Nickname.Value = string.IsNullOrWhiteSpace(nickname)
+            ? $"Player_{OwnerId}"
             : nickname.Trim();
-
-        Nickname.Value = safeValue;
     }
 
-    private void OnHpChanged(int prev, int next)
+    private void OnHpChanged(int prev, int next, bool asServer)
     {
-        if (!IsServer) return;
+        if (!base.IsServerInitialized) return;
 
         if (next <= 0 && IsAlive.Value)
         {
@@ -77,38 +61,37 @@ public class PlayerNetwork : NetworkBehaviour
         }
     }
 
+    private void OnIsAliveChanged(bool prev, bool next, bool asServer)
+    {
+        if (_model != null)
+            _model.SetActive(next);
+    }
+
     private IEnumerator RespawnRoutine()
     {
-        int timeLeft = Mathf.RoundToInt(_respawnDelay);
+        int t = Mathf.RoundToInt(_respawnDelay);
 
-        while (timeLeft > 0)
+        while (t > 0)
         {
-            RespawnTimer.Value = timeLeft;
+            RespawnTimer.Value = t;
             yield return new WaitForSeconds(1f);
-            timeLeft--;
+            t--;
         }
 
         RespawnTimer.Value = 0;
 
         if (_spawnPoints.Length > 0)
         {
-            int idx = Random.Range(0, _spawnPoints.Length);
+            int i = Random.Range(0, _spawnPoints.Length);
+
             var cc = GetComponent<CharacterController>();
             cc.enabled = false;
-
-            transform.position = _spawnPoints[idx].position;
-
+            transform.position = _spawnPoints[i].position;
             cc.enabled = true;
         }
 
         HP.Value = 100;
         Ammo.Value = _maxAmmo;
         IsAlive.Value = true;
-    }
-
-    private void OnIsAliveChanged(bool prev, bool next)
-    {
-        if (_model != null)
-            _model.SetActive(next);
     }
 }

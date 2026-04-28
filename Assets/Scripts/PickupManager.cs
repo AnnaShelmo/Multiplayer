@@ -1,46 +1,65 @@
-﻿using Unity.Netcode;
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections;
+using FishNet.Managing;
 
 public class PickupManager : MonoBehaviour
 {
-    [SerializeField] private GameObject _healthPickupPrefab;
-    [SerializeField] private Transform[] _spawnPoints;
-    [SerializeField] private float _respawnDelay = 3f;
+    [SerializeField] private GameObject _prefab;
+    [SerializeField] private Transform[] _points;
+    [SerializeField] private float _delay = 3f;
 
+    private NetworkManager _nm;
 
     private void Start()
     {
-        NetworkManager.Singleton.OnServerStarted += SpawnAll;
+        _nm = FindFirstObjectByType<NetworkManager>();
+
+        if (_nm == null)
+        {
+            Debug.LogError("NetworkManager not found!");
+            return;
+        }
+
+        _nm.ServerManager.OnServerConnectionState += OnServer;
     }
 
     private void OnDestroy()
     {
-        if (NetworkManager.Singleton != null)
-            NetworkManager.Singleton.OnServerStarted -= SpawnAll;
+        if (_nm != null)
+            _nm.ServerManager.OnServerConnectionState -= OnServer;
+    }
+
+    private void OnServer(FishNet.Transporting.ServerConnectionStateArgs obj)
+    {
+        if (obj.ConnectionState == FishNet.Transporting.LocalConnectionState.Started)
+            SpawnAll();
     }
 
     private void SpawnAll()
     {
-        foreach (var point in _spawnPoints)
-            SpawnPickup(point.position);
+        foreach (var p in _points)
+            Spawn(p.position);
     }
 
-    public void OnPickedUp(Vector3 position)
+    public void OnPickedUp(Vector3 pos)
     {
-        StartCoroutine(RespawnAfterDelay(position));
+        StartCoroutine(Respawn(pos));
     }
 
-    private IEnumerator RespawnAfterDelay(Vector3 position)
+    private IEnumerator Respawn(Vector3 pos)
     {
-        yield return new WaitForSeconds(_respawnDelay);
-        SpawnPickup(position);
+        yield return new WaitForSeconds(_delay);
+        Spawn(pos);
     }
 
-    private void SpawnPickup(Vector3 position)
+    private void Spawn(Vector3 pos)
     {
-        var go = Instantiate(_healthPickupPrefab, position, Quaternion.identity);
-        go.GetComponent<HealthPickup>().Init(this);
-        go.GetComponent<NetworkObject>().Spawn();
+        var go = Instantiate(_prefab, pos, Quaternion.identity);
+
+        var pickup = go.GetComponent<HealthPickup>();
+        if (pickup != null)
+            pickup.Init(this);
+
+        _nm.ServerManager.Spawn(go);
     }
 }

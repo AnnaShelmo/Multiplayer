@@ -1,4 +1,4 @@
-using Unity.Netcode;
+using FishNet.Object;
 using UnityEngine;
 
 public class Projectile : NetworkBehaviour
@@ -8,23 +8,22 @@ public class Projectile : NetworkBehaviour
 
     private void Update()
     {
-        if (!IsServer) return; // движение только на сервере
+        if (!base.IsServerInitialized) return;
 
         transform.Translate(Vector3.forward * _speed * Time.deltaTime);
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (!IsServer) return;
+        if (!base.IsServerInitialized) return;
 
         var target = other.GetComponent<PlayerNetwork>();
         if (target == null) return;
 
-        // не наносим урон самому себе
-        if (target.OwnerClientId == OwnerClientId) return;
+        if (target.OwnerId == OwnerId) return;
 
         target.HP.Value = Mathf.Max(0, target.HP.Value - _damage);
 
-        NetworkObject.Despawn(true);
+        base.Despawn();
     }
 }

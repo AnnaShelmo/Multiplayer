@@ -1,64 +1,74 @@
-﻿using TMPro;
-using Unity.Collections;
-using Unity.Netcode;
+﻿using FishNet.Object;
+using TMPro;
 using UnityEngine;
 
 public class PlayerView : NetworkBehaviour
 {
-    [SerializeField] private PlayerNetwork _playerNetwork;
-    [SerializeField] private TMP_Text _nicknameText;
-    [SerializeField] private TMP_Text _hpText;
+    [SerializeField] private PlayerNetwork _net;
+    [SerializeField] private TMP_Text _nick;
+    [SerializeField] private TMP_Text _hp;
+    [SerializeField] private TMP_Text _ammo;
+    [SerializeField] private TMP_Text _respawn;
 
-    [SerializeField] private TMP_Text _ammoText;          
-    [SerializeField] private TMP_Text _respawnText;       
-
-    public override void OnNetworkSpawn()
+    public override void OnStartClient()
     {
-        _playerNetwork.Nickname.OnValueChanged += OnNicknameChanged;
-        _playerNetwork.HP.OnValueChanged += OnHpChanged;
-        _playerNetwork.Ammo.OnValueChanged += OnAmmoChanged;
-        _playerNetwork.RespawnTimer.OnValueChanged += OnRespawnTimerChanged;
+        base.OnStartClient();
 
-        OnNicknameChanged(default, _playerNetwork.Nickname.Value);
-        OnHpChanged(0, _playerNetwork.HP.Value);
-        OnAmmoChanged(0, _playerNetwork.Ammo.Value);
+        // Подписки
+        _net.Nickname.OnChange += OnNicknameChanged;
+        _net.HP.OnChange += OnHpChanged;
+        _net.Ammo.OnChange += OnAmmoChanged;
+        _net.RespawnTimer.OnChange += OnRespawnChanged;
 
-        OnRespawnTimerChanged(0, _playerNetwork.RespawnTimer.Value);
+        // ВАЖНО: начальная инициализация
+        UpdateAllUI();
 
-        if (!IsOwner)
-            _ammoText.gameObject.SetActive(false);
-
+        // Показываем патроны только своему игроку
+        _ammo.gameObject.SetActive(base.IsOwner);
     }
 
-    public override void OnNetworkDespawn()
+    public override void OnStopClient()
     {
-        _playerNetwork.Nickname.OnValueChanged -= OnNicknameChanged;
-        _playerNetwork.HP.OnValueChanged -= OnHpChanged;
-        _playerNetwork.Ammo.OnValueChanged -= OnAmmoChanged;
-        _playerNetwork.RespawnTimer.OnValueChanged -= OnRespawnTimerChanged;
+        base.OnStopClient();
+
+        _net.Nickname.OnChange -= OnNicknameChanged;
+        _net.HP.OnChange -= OnHpChanged;
+        _net.Ammo.OnChange -= OnAmmoChanged;
+        _net.RespawnTimer.OnChange -= OnRespawnChanged;
     }
 
-    private void OnNicknameChanged(FixedString32Bytes oldValue, FixedString32Bytes newValue)
+    // ---------------- UI UPDATE ----------------
+
+    private void UpdateAllUI()
     {
-        _nicknameText.text = newValue.ToString();
+        OnNicknameChanged(default, _net.Nickname.Value, false);
+        OnHpChanged(0, _net.HP.Value, false);
+        OnAmmoChanged(0, _net.Ammo.Value, false);
+        OnRespawnChanged(0, _net.RespawnTimer.Value, false);
     }
 
-    private void OnHpChanged(int oldValue, int newValue)
+    private void OnNicknameChanged(string prev, string next, bool asServer)
     {
-        _hpText.text = "HP: " + newValue;
+        _nick.text = next;
     }
 
-    private void OnAmmoChanged(int oldValue, int newValue)
+    private void OnHpChanged(int prev, int next, bool asServer)
     {
-        if (IsOwner)
-            _ammoText.text = "Ammo: " + newValue;
+        _hp.text = "HP: " + next;
     }
 
-    private void OnRespawnTimerChanged(int oldValue, int newValue)
+    private void OnAmmoChanged(int prev, int next, bool asServer)
     {
-        if (!IsOwner) return;
+        if (!base.IsOwner) return;
 
-        _respawnText.gameObject.SetActive(newValue > 0);
-        _respawnText.text = "Respawn in: " + newValue;
+        _ammo.text = "Ammo: " + next;
+    }
+
+    private void OnRespawnChanged(int prev, int next, bool asServer)
+    {
+        if (!base.IsOwner) return;
+
+        _respawn.gameObject.SetActive(next > 0);
+        _respawn.text = "Respawn: " + next;
     }
 }
