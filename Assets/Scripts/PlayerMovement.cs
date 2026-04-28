@@ -7,9 +7,11 @@ using UnityEngine;
 public class PlayerMovement : NetworkBehaviour
 {
     [SerializeField] private float _speed = 5f;
+    [SerializeField] private bool _useCSP = true;
 
     private CharacterController _cc;
     private PlayerNetwork _net;
+    private Vector2 _latestServerInput; // Для режима без CSP: последний ввод от клиента (на сервере)
 
     private void Awake()
     {
@@ -53,31 +55,40 @@ public class PlayerMovement : NetworkBehaviour
         if (_net != null && !_net.IsAlive.Value)
             return;
 
-        // 👇 Владелец отправляет ввод
-        if (base.IsOwner)
+        if (_useCSP)
         {
-            MoveData md = new MoveData
+            // --- Режим CSP (предсказание) ---
+            if (base.IsOwner)
             {
-                Horizontal = Input.GetAxisRaw("Horizontal"),
-                Vertical = Input.GetAxisRaw("Vertical")
-            };
+                MoveData md = new MoveData
+                {
+                    Horizontal = Input.GetAxisRaw("Horizontal"),
+                    Vertical = Input.GetAxisRaw("Vertical")
+                };
+                Replicate(md);
+            }
+            else
+            {
+                Replicate(default);
+            }
 
-            Replicate(md);
+            if (base.IsServerInitialized)
+            {
+                ReconcileData rd = new ReconcileData
+                {
+                    Position = transform.position
+                };
+                Reconcile(rd);
+            }
         }
         else
         {
-            Replicate(default);
-        }
-
-        // 👇 Сервер шлёт состояние
-        if (base.IsServerInitialized)
-        {
-            ReconcileData rd = new ReconcileData
+            // --- Режим без CSP: сервер постоянно применяет последний ввод клиента ---
+            if (base.IsServerInitialized && _latestServerInput.sqrMagnitude > 0.01f)
             {
-                Position = transform.position
-            };
-
-            Reconcile(rd);
+                Vector3 move = new Vector3(_latestServerInput.x, 0, _latestServerInput.y).normalized;
+                _cc.Move(move * _speed * (float)base.TimeManager.TickDelta);
+            }
         }
     }
 
@@ -97,9 +108,12 @@ public class PlayerMovement : NetworkBehaviour
         ReconcileData rd,
         Channel channel = Channel.Unreliable)
     {
-        _cc.enabled = false;
-        transform.position = rd.Position;
-        _cc.enabled = true;
+        if (Vector3.Distance(transform.position, rd.Position) > 0.1f)
+        {
+            _cc.enabled = false;
+            transform.position = rd.Position;
+            _cc.enabled = true;
+        }
     }
 
     public override void CreateReconcile()
@@ -110,5 +124,32 @@ public class PlayerMovement : NetworkBehaviour
         };
 
         Reconcile(rd);
+    }
+
+    private void Update()
+    {
+        // Если CSP включен — движение идет через OnTick/Replicate
+        if (_useCSP) return;
+        if (!base.IsOwner || !_net.IsAlive.Value) return;
+
+        // Отправляем ввод на сервер каждый кадр (включая нулевой при отпускании клавиш)
+        float h = Input.GetAxisRaw("Horizontal");
+        float v = Input.GetAxisRaw("Vertical");
+        MoveServerRpc(h, v);
+    }
+
+    [ServerRpc]
+    private void MoveServerRpc(float h, float v)
+    {
+        if (!base.IsServerInitialized) return;
+        // Сохраняем последний ввод от клиента (сервер будет применять его в OnTick)
+        _latestServerInput = new Vector2(h, v);
+    }
+
+    // Метод для переключения CSP (для демонстрации)
+    // Не забудь вручную переключить Owner Enabled в NetworkTransform на префабе
+    public void ToggleCSP()
+    {
+        _useCSP = !_useCSP;
     }
 }
