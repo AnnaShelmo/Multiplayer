@@ -10,6 +10,7 @@ public class PlayerNetwork : NetworkBehaviour
     public readonly SyncVar<bool> IsAlive = new(true);
     public readonly SyncVar<int> Ammo = new(20);
     public readonly SyncVar<int> RespawnTimer = new(0);
+    public readonly SyncVar<int> Score = new(0);
 
     [SerializeField] private GameObject _model;
     [SerializeField] private float _respawnDelay = 7f;
@@ -93,5 +94,15 @@ public class PlayerNetwork : NetworkBehaviour
         HP.Value = 100;
         Ammo.Value = _maxAmmo;
         IsAlive.Value = true;
+    }
+
+    public void AddScore(int amount = 1)
+    {
+        Score.Value += amount;
+    }
+
+    public void ResetScore()
+    {
+        Score.Value = 0;
     }
 }

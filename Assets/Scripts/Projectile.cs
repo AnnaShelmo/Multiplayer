@@ -6,6 +6,13 @@ public class Projectile : NetworkBehaviour
     [SerializeField] private float _speed = 18f;
     [SerializeField] private int _damage = 20;
 
+    private PlayerNetwork _shooterNet;
+
+    public void Initialize(PlayerNetwork shooter)
+    {
+        _shooterNet = shooter;
+    }
+
     private void Update()
     {
         if (!base.IsServerInitialized) return;
@@ -22,7 +29,14 @@ public class Projectile : NetworkBehaviour
 
         if (target.OwnerId == OwnerId) return;
 
-        target.HP.Value = Mathf.Max(0, target.HP.Value - _damage);
+        int damage = _damage;
+        int newHp = target.HP.Value - damage;
+        target.HP.Value = Mathf.Max(0, newHp);
+
+        if (newHp <= 0 && _shooterNet != null)
+        {
+            _shooterNet.AddScore(1);
+        }
 
         base.Despawn();
     }

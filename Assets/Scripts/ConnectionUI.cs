@@ -1,6 +1,8 @@
+﻿using FishNet;
+using FishNet.Managing;
+using FishNet.Transporting;
 using TMPro;
 using UnityEngine;
-using FishNet.Managing;
 
 public class ConnectionUI : MonoBehaviour
 {
@@ -8,22 +10,30 @@ public class ConnectionUI : MonoBehaviour
     [SerializeField] private GameObject _menuRoot;
 
     public static string PlayerNickname { get; private set; } = "Player";
-
     private NetworkManager _networkManager;
 
     private void Start()
     {
-        _networkManager = FindFirstObjectByType<NetworkManager>();
-
+        _networkManager = InstanceFinder.NetworkManager;
+        if (_networkManager == null)
+        {
+            Debug.LogError("NetworkManager not found!");
+            return;
+        }
         _networkManager.ClientManager.OnClientConnectionState += OnClientState;
+
+        if (Application.isBatchMode)
+        {
+            Debug.Log("[SERVER] Headless -> starting server");
+            _networkManager.ServerManager.StartConnection();
+        }
     }
 
-    private void OnClientState(FishNet.Transporting.ClientConnectionStateArgs obj)
+    private void OnClientState(ClientConnectionStateArgs obj)
     {
-        if (obj.ConnectionState == FishNet.Transporting.LocalConnectionState.Started)
-        {
+        Debug.Log("Client state: " + obj.ConnectionState);
+        if (obj.ConnectionState == LocalConnectionState.Started)
             _menuRoot.SetActive(false);
-        }
     }
 
     public void StartAsHost()

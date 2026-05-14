@@ -11,19 +11,25 @@ public class PlayerMovement : NetworkBehaviour
 
     private CharacterController _cc;
     private PlayerNetwork _net;
-    private Vector2 _latestServerInput; // Для режима без CSP: последний ввод от клиента (на сервере)
+    private Vector2 _latestServerInput;
+    private GameManager _gm;
 
     private void Awake()
     {
         _cc = GetComponent<CharacterController>();
         _net = GetComponent<PlayerNetwork>();
+        _gm = FindFirstObjectByType<GameManager>(); //
+    }
+
+    private void Start()
+    {
+        _gm = FindFirstObjectByType<GameManager>();
     }
 
     public struct MoveData : IReplicateData
     {
         public float Horizontal;
         public float Vertical;
-
         private uint _tick;
         public uint GetTick() => _tick;
         public void SetTick(uint value) => _tick = value;
@@ -33,7 +39,6 @@ public class PlayerMovement : NetworkBehaviour
     public struct ReconcileData : IReconcileData
     {
         public Vector3 Position;
-
         private uint _tick;
         public uint GetTick() => _tick;
         public void SetTick(uint value) => _tick = value;
@@ -52,12 +57,11 @@ public class PlayerMovement : NetworkBehaviour
 
     private void OnTick()
     {
-        if (_net != null && !_net.IsAlive.Value)
-            return;
+        if (_net != null && !_net.IsAlive.Value) return;
+        if (_gm != null && _gm.CurrentState.Value != GameManager.GameState.InProgress) return;
 
         if (_useCSP)
         {
-            // --- Режим CSP (предсказание) ---
             if (base.IsOwner)
             {
                 MoveData md = new MoveData
@@ -83,7 +87,6 @@ public class PlayerMovement : NetworkBehaviour
         }
         else
         {
-            // --- Режим без CSP: сервер постоянно применяет последний ввод клиента ---
             if (base.IsServerInitialized && _latestServerInput.sqrMagnitude > 0.01f)
             {
                 Vector3 move = new Vector3(_latestServerInput.x, 0, _latestServerInput.y).normalized;
@@ -93,20 +96,14 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     [Replicate]
-    private void Replicate(
-        MoveData md,
-        ReplicateState state = ReplicateState.Invalid,
-        Channel channel = Channel.Unreliable)
+    private void Replicate(MoveData md, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
     {
         Vector3 move = new Vector3(md.Horizontal, 0f, md.Vertical).normalized;
-
         _cc.Move(move * _speed * (float)base.TimeManager.TickDelta);
     }
 
     [Reconcile]
-    private void Reconcile(
-        ReconcileData rd,
-        Channel channel = Channel.Unreliable)
+    private void Reconcile(ReconcileData rd, Channel channel = Channel.Unreliable)
     {
         if (Vector3.Distance(transform.position, rd.Position) > 0.1f)
         {
@@ -118,21 +115,19 @@ public class PlayerMovement : NetworkBehaviour
 
     public override void CreateReconcile()
     {
-        ReconcileData rd = new ReconcileData
-        {
-            Position = transform.position
-        };
-
+        ReconcileData rd = new ReconcileData { Position = transform.position };
         Reconcile(rd);
     }
 
     private void Update()
     {
-        // Если CSP включен — движение идет через OnTick/Replicate
         if (_useCSP) return;
         if (!base.IsOwner || !_net.IsAlive.Value) return;
 
-        // Отправляем ввод на сервер каждый кадр (включая нулевой при отпускании клавиш)
+        // Блокировка в лобби
+        if (_gm != null && _gm.CurrentState.Value != GameManager.GameState.InProgress)
+            return;
+
         float h = Input.GetAxisRaw("Horizontal");
         float v = Input.GetAxisRaw("Vertical");
         MoveServerRpc(h, v);
@@ -142,12 +137,9 @@ public class PlayerMovement : NetworkBehaviour
     private void MoveServerRpc(float h, float v)
     {
         if (!base.IsServerInitialized) return;
-        // Сохраняем последний ввод от клиента (сервер будет применять его в OnTick)
         _latestServerInput = new Vector2(h, v);
     }
 
-    // Метод для переключения CSP (для демонстрации)
-    // Не забудь вручную переключить Owner Enabled в NetworkTransform на префабе
     public void ToggleCSP()
     {
         _useCSP = !_useCSP;
